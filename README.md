@@ -13,8 +13,8 @@ API REST para registrar e acompanhar chamados de suporte do IFRN.
 
 ## Estado atual
 
-A estrutura inicial esta pronta. Os cadastros, as regras de negocio, as migrations
-com dados iniciais e a execucao com Docker Compose serao implementados nas proximas etapas.
+A estrutura inicial, as entidades e as migrations com dados iniciais estao prontas.
+Os cadastros, as regras de negocio e a execucao com Docker Compose serao implementados nas proximas etapas.
 Ainda nao ha endpoints disponiveis.
 
 ## Organizacao
@@ -29,7 +29,7 @@ Os pacotes ficam em `src/main/java/br/edu/ifrn/chamados`:
 | `model` | Representar entidades e enums. |
 
 As dependencias entre classes serao recebidas pelo construtor, sem `@Autowired` em atributos.
-Os arquivos `package-info.java` documentam os pacotes enquanto as classes ainda nao existem.
+Os arquivos `package-info.java` documentam a responsabilidade de cada pacote.
 
 ## Compilar
 
@@ -67,9 +67,9 @@ Nao coloque credenciais no `application.properties` nem no Git. Arquivos `.env`
 sao ignorados, mas o Spring Boot nao os carrega automaticamente.
 
 O Flyway ficara responsavel por criar e evoluir o banco. O Hibernate usa
-`ddl-auto=validate`, portanto nao cria nem altera tabelas. As migrations ainda
-serao adicionadas na etapa de persistencia; esta etapa inicial nao valida a
-inicializacao completa da aplicacao.
+`ddl-auto=validate`, portanto nao cria nem altera tabelas. As migrations ficam em
+`src/main/resources/db/migration`: `V1` cria as tabelas e `V2` insere os dados iniciais.
+Sao 2 setores, 4 categorias e 4 usuarios ficticios: 2 solicitantes e 2 tecnicos.
 
 As listagens usarao paginas de 10 itens por padrao, com limite de 50.
 
@@ -84,3 +84,53 @@ Exemplos de commits: `feat: adiciona entidade Setor` e `fix: impede email duplic
 
 A entrega final sera a versao disponivel na `main`, com Docker Compose,
 exemplos de requisicao e as orientacoes completas de execucao.
+
+
+## Validar a persistencia localmente
+
+Com o Docker Desktop iniciado, crie um PostgreSQL de desenvolvimento (uma unica vez):
+
+```powershell
+docker run --name chamados-postgres -e POSTGRES_DB=chamados -e POSTGRES_USER=chamados -e POSTGRES_PASSWORD=chamados_local -p 5432:5432 -d postgres:17
+```
+
+A senha acima e apenas um exemplo para o banco local de desenvolvimento.
+Se o container ja existir e estiver parado, use `docker start chamados-postgres`.
+Espere o banco ficar pronto antes de executar os testes:
+
+```powershell
+docker exec chamados-postgres pg_isready -U chamados -d chamados
+```
+
+Defina as variaveis na mesma sessao do PowerShell:
+
+```powershell
+$env:DB_URL = "jdbc:postgresql://localhost:5432/chamados"
+$env:DB_USERNAME = "chamados"
+$env:DB_PASSWORD = "chamados_local"
+.\mvnw.cmd clean verify
+```
+
+Os testes usam um PostgreSQL de desenvolvimento. O Flyway aplica as migrations e
+o Hibernate valida o mapeamento. O teste de persistencia verifica os relacionamentos
+e desfaz os registros criados no teste ao terminar.
+
+Para iniciar a aplicacao depois dos testes:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+Ainda nao ha endpoints: uma resposta 404 na raiz e esperada nesta etapa.
+O Docker Compose que iniciara toda a aplicacao sera adicionado na task de Docker.
+
+## Migrations
+
+O Flyway registra cada migration aplicada na tabela `flyway_schema_history`,
+incluindo a versao e o checksum do arquivo. Se uma migration aplicada for editada,
+o checksum muda e a validacao falha. Por isso, correcoes entram em uma nova
+migration com a proxima versao; nao alteramos as migrations ja aplicadas.
+
+Nao usamos `ddl-auto=update` em producao porque as alteracoes automaticas do
+Hibernate nao substituem um historico de SQL revisado e versionado. Aqui o Flyway
+altera o esquema e `ddl-auto=validate` confere se ele corresponde as entidades.
