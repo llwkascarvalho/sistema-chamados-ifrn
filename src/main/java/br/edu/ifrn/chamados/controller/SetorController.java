@@ -15,8 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifrn.chamados.dto.categoria.CategoriaResponse;
 import br.edu.ifrn.chamados.dto.setor.SetorRequest;
 import br.edu.ifrn.chamados.dto.setor.SetorResponse;
+import br.edu.ifrn.chamados.service.CategoriaService;
 import br.edu.ifrn.chamados.service.SetorService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 public class SetorController {
 
     private final SetorService setorService;
+    private final CategoriaService categoriaService;
 
     @GetMapping
     public Page<SetorResponse> listar(@RequestParam(required = false) String nome, Pageable pageable) {
@@ -42,6 +45,12 @@ public class SetorController {
     public ResponseEntity<SetorResponse> criar(@Valid @RequestBody SetorRequest request) {
         SetorResponse response = setorService.criar(request);
         return ResponseEntity.created(URI.create("/setores/" + response.id())).body(response);
+    }
+
+    @GetMapping("/{id}/categorias")
+    public Page<CategoriaResponse> listarCategorias(@PathVariable Long id,
+            @RequestParam(required = false) String nome, Pageable pageable) {
+        return categoriaService.listarPorSetor(id, nome, pageable);
     }
 
     @PutMapping("/{id}")
