@@ -5,9 +5,12 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.edu.ifrn.chamados.dto.chamado.AssumirChamadoRequest;
+import br.edu.ifrn.chamados.dto.chamado.CancelarChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.ChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.ChamadoResponse;
 import br.edu.ifrn.chamados.dto.chamado.InteracaoResponse;
+import br.edu.ifrn.chamados.dto.chamado.ResolverChamadoRequest;
 import br.edu.ifrn.chamados.exception.RecursoNaoEncontradoException;
 import br.edu.ifrn.chamados.exception.RegraNegocioException;
 import br.edu.ifrn.chamados.model.Categoria;
@@ -53,6 +56,60 @@ public class ChamadoService {
 
     public ChamadoResponse buscar(Long id) {
         return resposta(buscarEntidade(id));
+    }
+
+    @Transactional
+    public ChamadoResponse assumir(Long id, AssumirChamadoRequest request) {
+        Chamado chamado = buscarEntidade(id);
+        validarAberto(chamado);
+        Usuario tecnico = buscarUsuario(request.tecnicoId());
+        if (tecnico.getTipo() != TipoUsuario.TECNICO || tecnico.getSetor() == null
+                || !tecnico.getSetor().getId().equals(chamado.getCategoria().getSetor().getId())) {
+            throw new RegraNegocioException("Chamado deve ser assumido por um tecnico do setor responsavel");
+        }
+        chamado.setTecnico(tecnico);
+        chamado.setStatus(StatusChamado.EM_ATENDIMENTO);
+        return resposta(chamadoRepository.save(chamado));
+    }
+
+    @Transactional
+    public ChamadoResponse resolver(Long id, ResolverChamadoRequest request) {
+        Chamado chamado = buscarEntidade(id);
+        if (chamado.getStatus() != StatusChamado.EM_ATENDIMENTO) {
+            throw new RegraNegocioException("Apenas chamados em atendimento podem ser resolvidos");
+        }
+        Usuario tecnico = buscarUsuario(request.tecnicoId());
+        if (tecnico.getTipo() != TipoUsuario.TECNICO || chamado.getTecnico() == null
+                || !tecnico.getId().equals(chamado.getTecnico().getId())) {
+            throw new RegraNegocioException("Apenas o tecnico atribuido pode resolver o chamado");
+        }
+        if (request.solucao() == null || request.solucao().isBlank()) {
+            throw new RegraNegocioException("Solucao e obrigatoria para resolver o chamado");
+        }
+        chamado.setSolucao(request.solucao());
+        chamado.setStatus(StatusChamado.RESOLVIDO);
+        chamado.setDataFechamento(LocalDateTime.now());
+        return resposta(chamadoRepository.save(chamado));
+    }
+
+    @Transactional
+    public ChamadoResponse cancelar(Long id, CancelarChamadoRequest request) {
+        Chamado chamado = buscarEntidade(id);
+        validarAberto(chamado);
+        Usuario solicitante = buscarUsuario(request.solicitanteId());
+        if (solicitante.getTipo() != TipoUsuario.SOLICITANTE
+                || !solicitante.getId().equals(chamado.getSolicitante().getId())) {
+            throw new RegraNegocioException("Apenas o proprio solicitante pode cancelar o chamado");
+        }
+        chamado.setStatus(StatusChamado.CANCELADO);
+        chamado.setDataFechamento(LocalDateTime.now());
+        return resposta(chamadoRepository.save(chamado));
+    }
+
+    private void validarAberto(Chamado chamado) {
+        if (chamado.getStatus() != StatusChamado.ABERTO) {
+            throw new RegraNegocioException("Esta acao exige um chamado aberto");
+        }
     }
 
     private Chamado buscarEntidade(Long id) {
