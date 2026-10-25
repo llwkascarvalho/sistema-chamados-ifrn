@@ -12,7 +12,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     @Query("""
             select u from Usuario u
-            where (:nome is null or lower(u.nome) like lower(concat('%', :nome, '%')))
+            where (cast(:nome as string) is null
+                or lower(u.nome) like lower(concat('%', cast(:nome as string), '%')))
               and (:tipo is null or u.tipo = :tipo)
               and (:setorId is null or u.setor.id = :setorId)
             """)

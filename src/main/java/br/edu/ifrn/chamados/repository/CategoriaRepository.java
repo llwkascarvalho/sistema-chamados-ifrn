@@ -11,7 +11,8 @@ public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
 
     @Query("""
             select c from Categoria c
-            where (:nome is null or lower(c.nome) like lower(concat('%', :nome, '%')))
+            where (cast(:nome as string) is null
+                or lower(c.nome) like lower(concat('%', cast(:nome as string), '%')))
               and (:setorId is null or c.setor.id = :setorId)
             """)
     Page<Categoria> listar(String nome, Long setorId, Pageable pageable);
