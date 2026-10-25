@@ -1,0 +1,145 @@
+@baseUrl = http://localhost:8080
+@setorId = {{criarSetor.response.body.$.id}}
+@categoriaId = {{criarCategoria.response.body.$.id}}
+@usuarioId = {{criarUsuario.response.body.$.id}}
+
+### Criar setor
+# @name criarSetor
+POST {{baseUrl}}/setores
+Content-Type: application/json
+
+{
+  "nome": "Setor de apoio",
+  "sigla": "APOIO"
+}
+
+### Listar setores
+GET {{baseUrl}}/setores?nome=apoio&page=0&size=10&sort=nome,asc
+
+### Buscar setor
+GET {{baseUrl}}/setores/{{setorId}}
+
+### Atualizar setor
+PUT {{baseUrl}}/setores/{{setorId}}
+Content-Type: application/json
+
+{
+  "nome": "Setor de apoio ao ensino",
+  "sigla": "APOIO"
+}
+
+### Sigla duplicada: 409
+POST {{baseUrl}}/setores
+Content-Type: application/json
+
+{
+  "nome": "Outro setor",
+  "sigla": "APOIO"
+}
+
+### Criar categoria
+# @name criarCategoria
+POST {{baseUrl}}/categorias
+Content-Type: application/json
+
+{
+  "nome": "Equipamentos",
+  "descricao": "Problemas nos equipamentos de apoio",
+  "setorId": {{setorId}}
+}
+
+### Listar categorias
+GET {{baseUrl}}/categorias?nome=equip&setorId={{setorId}}&page=0&size=10&sort=nome,asc
+
+### Buscar categoria
+GET {{baseUrl}}/categorias/{{categoriaId}}
+
+### Listar categorias do setor
+GET {{baseUrl}}/setores/{{setorId}}/categorias?nome=equip&page=0&size=10
+
+### Atualizar categoria
+PUT {{baseUrl}}/categorias/{{categoriaId}}
+Content-Type: application/json
+
+{
+  "nome": "Equipamentos de sala",
+  "descricao": "Problemas nos equipamentos das salas de aula",
+  "setorId": {{setorId}}
+}
+
+### Setor com categoria vinculada: 409
+DELETE {{baseUrl}}/setores/{{setorId}}
+
+### Criar solicitante
+# @name criarUsuario
+POST {{baseUrl}}/usuarios
+Content-Type: application/json
+
+{
+  "nome": "Maria Costa",
+  "email": "maria.costa@example.com",
+  "matricula": "20260100",
+  "tipo": "SOLICITANTE"
+}
+
+### Listar usuarios
+GET {{baseUrl}}/usuarios?nome=maria&tipo=SOLICITANTE&page=0&size=10&sort=nome,asc
+
+### Listar tecnicos de um setor
+GET {{baseUrl}}/usuarios?tipo=TECNICO&setorId={{setorId}}
+
+### Buscar usuario
+GET {{baseUrl}}/usuarios/{{usuarioId}}
+
+### Atualizar usuario mantendo o proprio email
+PUT {{baseUrl}}/usuarios/{{usuarioId}}
+Content-Type: application/json
+
+{
+  "nome": "Maria Costa Silva",
+  "email": "maria.costa@example.com",
+  "matricula": "20260100",
+  "tipo": "SOLICITANTE"
+}
+
+### Email duplicado: 409
+POST {{baseUrl}}/usuarios
+Content-Type: application/json
+
+{
+  "nome": "Outra pessoa",
+  "email": "maria.costa@example.com",
+  "matricula": "20260101",
+  "tipo": "SOLICITANTE"
+}
+
+### Email invalido: 400
+POST {{baseUrl}}/usuarios
+Content-Type: application/json
+
+{
+  "nome": "Maria",
+  "email": "invalido",
+  "matricula": "20260101",
+  "tipo": "SOLICITANTE"
+}
+
+### Tecnico sem setor: 409
+POST {{baseUrl}}/usuarios
+Content-Type: application/json
+
+{
+  "nome": "Pedro Lima",
+  "email": "pedro.lima@example.com",
+  "matricula": "20260102",
+  "tipo": "TECNICO"
+}
+
+### Excluir categoria sem chamados
+DELETE {{baseUrl}}/categorias/{{categoriaId}}
+
+### Categoria excluida: 404
+GET {{baseUrl}}/categorias/{{categoriaId}}
+
+### Excluir setor sem vinculos
+DELETE {{baseUrl}}/setores/{{setorId}}

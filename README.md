@@ -13,9 +13,9 @@ API REST para registrar e acompanhar chamados de suporte do IFRN.
 
 ## Estado atual
 
-A estrutura inicial, as entidades, as migrations, os DTOs e o tratamento de erros estao prontos.
-Os cadastros, as regras de negocio e a execucao com Docker Compose serao implementados nas proximas etapas.
-Ainda nao ha endpoints disponiveis.
+A estrutura inicial, a persistencia, as validacoes e os cadastros de setores,
+categorias e usuarios estao prontos. O fluxo dos chamados e a execucao com
+Docker Compose serao implementados nas proximas etapas.
 
 ## Organizacao
 
@@ -51,9 +51,8 @@ No Linux ou macOS:
 ```
 
 Esse comando verifica a compilacao e gera o JAR em `target/`. Os testes nao sao
-executados nessa etapa porque o teste de contexto gerado pelo Initializr precisa
-do PostgreSQL configurado. A execucao dos testes sera incluida na validacao das
-proximas funcionalidades.
+executados com `-DskipTests`. Para executar a suite completa, configure o PostgreSQL
+e use `clean verify`, como explicado abaixo.
 
 ## Configuracao do banco
 
@@ -73,7 +72,7 @@ O Flyway ficara responsavel por criar e evoluir o banco. O Hibernate usa
 `src/main/resources/db/migration`: `V1` cria as tabelas e `V2` insere os dados iniciais.
 Sao 2 setores, 4 categorias e 4 usuarios ficticios: 2 solicitantes e 2 tecnicos.
 
-As listagens usarao paginas de 10 itens por padrao, com limite de 50.
+As listagens usam paginas de 10 itens por padrao, com limite de 50.
 
 ## Desenvolvimento
 
@@ -123,7 +122,7 @@ Para iniciar a aplicacao depois dos testes:
 .\mvnw.cmd spring-boot:run
 ```
 
-Ainda nao ha endpoints: uma resposta 404 na raiz e esperada nesta etapa.
+A raiz nao tem endpoint. Para conferir a API, acesse `http://localhost:8080/setores`.
 O Docker Compose que iniciara toda a aplicacao sera adicionado na task de Docker.
 
 ## Migrations
@@ -140,12 +139,12 @@ altera o esquema e `ddl-auto=validate` confere se ele corresponde as entidades.
 ## Validacoes e erros
 
 Os DTOs de entrada validam campos obrigatorios, email, limites de tamanho e IDs
-positivos. Os Controllers usarao `@Valid` ao receber esses DTOs nas proximas tasks.
+positivos. Os Controllers dos cadastros usam `@Valid` ao receber esses DTOs.
 As regras de negocio continuam nos Services.
 
 Os erros retornam `timestamp`, `status`, `mensagem` e `caminho`. Dados invalidos
 retornam 400; recursos inexistentes, 404; conflitos de negocio ou integridade, 409.
-As excecoes dos Services serao `RecursoNaoEncontradoException` e `RegraNegocioException`.
+Os Services usam `RecursoNaoEncontradoException` e `RegraNegocioException`.
 
 Para executar apenas os testes de validacao e tratamento de erros, sem banco:
 
@@ -153,4 +152,51 @@ Para executar apenas os testes de validacao e tratamento de erros, sem banco:
 .\mvnw.cmd "-Dtest=ValidacaoDtosTests,ApiExceptionHandlerTests" test
 ```
 
-Os Controllers usados nesses testes existem somente nos arquivos de teste.
+O Controller auxiliar de `ApiExceptionHandlerTests` existe somente no teste.
+
+## Cadastros
+
+| Recurso | Rotas | Filtros da listagem |
+| --- | --- | --- |
+| Setores | POST e GET `/setores`; GET, PUT e DELETE `/setores/{id}` | `nome` |
+| Categorias | POST e GET `/categorias`; GET, PUT e DELETE `/categorias/{id}` | `nome`, `setorId` |
+| Categorias de um setor | GET `/setores/{id}/categorias` | `nome` |
+| Usuarios | POST e GET `/usuarios`; GET e PUT `/usuarios/{id}` | `nome`, `tipo`, `setorId` |
+
+POST retorna 201 com o endereco do recurso em `Location`; consultas e atualizacoes
+retornam 200; exclusoes retornam 204. Nao ha DELETE de usuarios.
+
+As listagens aceitam `page`, `size` e `sort`. O JSON inclui `content`, `number`,
+`size`, `totalElements` e `totalPages`. Os filtros podem ser combinados e o nome
+e buscado por trecho, sem diferenciar maiusculas de minusculas.
+
+Exemplos:
+
+```http
+GET http://localhost:8080/setores?nome=tecnologia&page=0&size=10&sort=nome,asc
+GET http://localhost:8080/categorias?nome=rede&setorId=1
+GET http://localhost:8080/usuarios?tipo=TECNICO&setorId=1
+```
+
+Sigla e email duplicados retornam 409, inclusive quando mudam apenas maiusculas
+e minusculas. A atualizacao permite manter a sigla ou o email do proprio cadastro.
+Tecnicos precisam de um setor; setor informado e inexistente retorna 404.
+
+Setores e categorias com chamados nao podem ser excluidos, independentemente do
+status do chamado. Setores com categorias ou usuarios vinculados tambem retornam
+409: remova ou reatribua esses vinculos antes de excluir, sem apagar dados em cascata.
+
+O arquivo `requisicoes.http` contem as operacoes dos cadastros. Com a extensao
+REST Client no VS Code, execute as requisicoes na ordem do arquivo; os IDs dos
+novos registros sao reaproveitados nas requisicoes seguintes.
+
+Para testar Controllers, Services, validacoes e erros sem PostgreSQL:
+
+```powershell
+.\mvnw.cmd "-Dtest=CadastroServiceTests,CadastroControllerTests,ValidacaoDtosTests,ApiExceptionHandlerTests" test
+```
+
+Com o banco e as variaveis de ambiente configurados, `./mvnw clean verify`
+(ou `.\mvnw.cmd clean verify` no PowerShell) tambem executa os testes de persistencia
+dos cadastros, filtros e bloqueios de exclusao. Os dados desses testes sao desfeitos
+ao terminar.
