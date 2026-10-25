@@ -15,6 +15,8 @@ import br.edu.ifrn.chamados.dto.chamado.AssumirChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.CancelarChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.ChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.ChamadoResponse;
+import br.edu.ifrn.chamados.dto.chamado.InteracaoRequest;
+import br.edu.ifrn.chamados.dto.chamado.InteracaoResponse;
 import br.edu.ifrn.chamados.dto.chamado.ResolverChamadoRequest;
 import br.edu.ifrn.chamados.service.ChamadoService;
 import jakarta.validation.Valid;
@@ -51,5 +53,11 @@ public class ChamadoController {
     @PatchMapping("/{id}/cancelar")
     public ChamadoResponse cancelar(@PathVariable Long id, @Valid @RequestBody CancelarChamadoRequest request) {
         return chamadoService.cancelar(id, request);
+    }
+
+    @PostMapping("/{id}/interacoes")
+    public ResponseEntity<InteracaoResponse> registrarInteracao(@PathVariable Long id,
+            @Valid @RequestBody InteracaoRequest request) {
+        return ResponseEntity.status(201).body(chamadoService.registrarInteracao(id, request));
     }
 }

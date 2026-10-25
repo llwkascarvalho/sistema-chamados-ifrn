@@ -9,6 +9,7 @@ import br.edu.ifrn.chamados.dto.chamado.AssumirChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.CancelarChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.ChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.ChamadoResponse;
+import br.edu.ifrn.chamados.dto.chamado.InteracaoRequest;
 import br.edu.ifrn.chamados.dto.chamado.InteracaoResponse;
 import br.edu.ifrn.chamados.dto.chamado.ResolverChamadoRequest;
 import br.edu.ifrn.chamados.exception.RecursoNaoEncontradoException;
@@ -22,6 +23,7 @@ import br.edu.ifrn.chamados.model.TipoUsuario;
 import br.edu.ifrn.chamados.model.Usuario;
 import br.edu.ifrn.chamados.repository.CategoriaRepository;
 import br.edu.ifrn.chamados.repository.ChamadoRepository;
+import br.edu.ifrn.chamados.repository.InteracaoRepository;
 import br.edu.ifrn.chamados.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -33,6 +35,7 @@ public class ChamadoService {
     private final ChamadoRepository chamadoRepository;
     private final UsuarioRepository usuarioRepository;
     private final CategoriaRepository categoriaRepository;
+    private final InteracaoRepository interacaoRepository;
 
     @Transactional
     public ChamadoResponse abrir(ChamadoRequest request) {
@@ -104,6 +107,27 @@ public class ChamadoService {
         chamado.setStatus(StatusChamado.CANCELADO);
         chamado.setDataFechamento(LocalDateTime.now());
         return resposta(chamadoRepository.save(chamado));
+    }
+
+    @Transactional
+    public InteracaoResponse registrarInteracao(Long id, InteracaoRequest request) {
+        Chamado chamado = buscarEntidade(id);
+        if (chamado.getStatus() == StatusChamado.RESOLVIDO || chamado.getStatus() == StatusChamado.CANCELADO) {
+            throw new RegraNegocioException("Chamado encerrado nao aceita novas interacoes");
+        }
+        Usuario autor = buscarUsuario(request.autorId());
+        boolean solicitante = autor.getId().equals(chamado.getSolicitante().getId());
+        boolean tecnico = chamado.getTecnico() != null && autor.getId().equals(chamado.getTecnico().getId());
+        if (!solicitante && !tecnico) {
+            throw new RegraNegocioException("Apenas o solicitante e o tecnico atribuido podem registrar interacoes");
+        }
+        Interacao interacao = new Interacao();
+        interacao.setTexto(request.texto());
+        interacao.setDataHora(LocalDateTime.now());
+        interacao.setChamado(chamado);
+        interacao.setAutor(autor);
+        chamado.getInteracoes().add(interacao);
+        return respostaInteracao(interacaoRepository.save(interacao));
     }
 
     private void validarAberto(Chamado chamado) {
