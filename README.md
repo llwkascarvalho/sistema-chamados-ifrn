@@ -13,9 +13,9 @@ API REST para registrar e acompanhar chamados de suporte do IFRN.
 
 ## Estado atual
 
-A estrutura inicial, a persistencia, as validacoes e os cadastros de setores,
-categorias e usuarios estao prontos. O fluxo dos chamados e a execucao com
-Docker Compose serao implementados nas proximas etapas.
+A persistencia, as validacoes, os cadastros e o fluxo dos chamados estao prontos.
+As listagens de chamados, seus filtros e a execucao com Docker Compose ficam
+para as proximas etapas.
 
 ## Organizacao
 
@@ -186,9 +186,11 @@ Setores e categorias com chamados nao podem ser excluidos, independentemente do
 status do chamado. Setores com categorias ou usuarios vinculados tambem retornam
 409: remova ou reatribua esses vinculos antes de excluir, sem apagar dados em cascata.
 
-O arquivo `requisicoes.http` contem as operacoes dos cadastros. Com a extensao
-REST Client no VS Code, execute as requisicoes na ordem do arquivo; os IDs dos
-novos registros sao reaproveitados nas requisicoes seguintes.
+O arquivo `requisicoes.http` contem as operacoes dos cadastros e os fluxos dos
+chamados. Com a extensao REST Client no VS Code, execute as requisicoes na ordem
+do arquivo; os IDs dos novos registros sao reaproveitados nas requisicoes seguintes.
+A secao de chamados usa os usuarios e a categoria da migration V2; ajuste as
+variaveis do inicio do arquivo se esses registros tiverem sido alterados.
 
 Para testar Controllers, Services, validacoes e erros sem PostgreSQL:
 
@@ -200,3 +202,62 @@ Com o banco e as variaveis de ambiente configurados, `./mvnw clean verify`
 (ou `.\mvnw.cmd clean verify` no PowerShell) tambem executa os testes de persistencia
 dos cadastros, filtros e bloqueios de exclusao. Os dados desses testes sao desfeitos
 ao terminar.
+
+## Fluxo dos chamados
+
+| Metodo e rota | Operacao | Sucesso |
+| --- | --- | --- |
+| POST `/chamados` | Abrir um chamado | 201 |
+| GET `/chamados/{id}` | Consultar detalhes e interacoes | 200 |
+| PATCH `/chamados/{id}/assumir` | Atribuir o chamado ao tecnico | 200 |
+| PATCH `/chamados/{id}/resolver` | Resolver com uma solucao | 200 |
+| PATCH `/chamados/{id}/cancelar` | Cancelar pelo solicitante | 200 |
+| POST `/chamados/{id}/interacoes` | Registrar andamento ou mais detalhes | 201 |
+
+As regras ficam no `ChamadoService`. O sistema preenche as datas, abre o chamado
+com status `ABERTO` e usa prioridade `MEDIA` quando ela nao e informada.
+Somente usuarios do tipo `SOLICITANTE` podem abrir chamados.
+
+| Acao | Status exigido | Quem pode executar | Novo status |
+| --- | --- | --- | --- |
+| Assumir | ABERTO | Tecnico do setor da categoria | EM_ATENDIMENTO |
+| Resolver | EM_ATENDIMENTO | Tecnico atribuido, informando a solucao | RESOLVIDO |
+| Cancelar | ABERTO | Proprio solicitante | CANCELADO |
+| Registrar interacao | ABERTO ou EM_ATENDIMENTO | Solicitante ou tecnico atribuido | Sem alteracao |
+
+A resolucao e o cancelamento preenchem `dataFechamento`. Chamados encerrados nao
+aceitam novas acoes nem interacoes. As transicoes invalidas e as acoes de usuarios
+sem permissao retornam 409. IDs inexistentes retornam 404 e entradas invalidas,
+como uma solucao vazia, retornam 400.
+
+Nao ha autenticacao: `solicitanteId`, `tecnicoId` ou `autorId` identificam o usuario
+no corpo da requisicao. A consulta detalhada traz as interacoes ordenadas por
+`dataHora` e, em caso de empate, por `id`.
+
+Exemplo de abertura, usando os dados iniciais:
+
+```http
+POST http://localhost:8080/chamados
+Content-Type: application/json
+
+{
+  "titulo": "Wi-Fi indisponivel",
+  "descricao": "Nao consigo conectar a rede",
+  "local": "Laboratorio 1",
+  "solicitanteId": 1,
+  "categoriaId": 1
+}
+```
+
+Para testar todos os Controllers, Services, validacoes e erros sem banco:
+
+```powershell
+.\mvnw.cmd "-Dtest=ChamadoServiceTests,ChamadoControllerTests,CadastroServiceTests,CadastroControllerTests,ValidacaoDtosTests,ApiExceptionHandlerTests" test
+```
+
+Com o PostgreSQL configurado, `.\mvnw.cmd clean verify` tambem verifica os fluxos
+completos de resolucao e cancelamento, a recuperacao do historico e os bloqueios
+apos encerramento. Esses testes desfazem seus dados ao terminar.
+
+As rotas GET `/chamados` e GET `/usuarios/{id}/chamados`, com paginacao e filtros,
+serao implementadas na proxima task.

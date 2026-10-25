@@ -1,4 +1,13 @@
 @baseUrl = http://localhost:8080
+
+# IDs da migration V2. Ajuste se os dados iniciais forem alterados.
+@solicitanteId = 1
+@outroSolicitanteId = 2
+@tecnicoId = 3
+@outroTecnicoId = 4
+@categoriaInicialId = 1
+@chamadoId = {{abrirChamado.response.body.$.id}}
+@chamadoCancelarId = {{abrirParaCancelar.response.body.$.id}}
 @setorId = {{criarSetor.response.body.$.id}}
 @categoriaId = {{criarCategoria.response.body.$.id}}
 @usuarioId = {{criarUsuario.response.body.$.id}}
@@ -143,3 +152,133 @@ GET {{baseUrl}}/categorias/{{categoriaId}}
 
 ### Excluir setor sem vinculos
 DELETE {{baseUrl}}/setores/{{setorId}}
+
+
+### Abrir chamado sem prioridade (usa MEDIA)
+# @name abrirChamado
+POST {{baseUrl}}/chamados
+Content-Type: application/json
+
+{
+  "titulo": "Wi-Fi indisponivel",
+  "descricao": "Nao consigo conectar a rede",
+  "local": "Laboratorio 1",
+  "solicitanteId": {{solicitanteId}},
+  "categoriaId": {{categoriaInicialId}}
+}
+
+### Consultar detalhes e historico
+GET {{baseUrl}}/chamados/{{chamadoId}}
+
+### Solicitante acrescenta detalhes antes do atendimento
+POST {{baseUrl}}/chamados/{{chamadoId}}/interacoes
+Content-Type: application/json
+
+{
+  "texto": "O problema acontece em todos os computadores da sala",
+  "autorId": {{solicitanteId}}
+}
+
+### Tecnico de outro setor: 409
+PATCH {{baseUrl}}/chamados/{{chamadoId}}/assumir
+Content-Type: application/json
+
+{
+  "tecnicoId": {{outroTecnicoId}}
+}
+
+### Tecnico do setor assume
+PATCH {{baseUrl}}/chamados/{{chamadoId}}/assumir
+Content-Type: application/json
+
+{
+  "tecnicoId": {{tecnicoId}}
+}
+
+### Tecnico atribuido registra andamento
+POST {{baseUrl}}/chamados/{{chamadoId}}/interacoes
+Content-Type: application/json
+
+{
+  "texto": "Vou verificar o ponto de acesso",
+  "autorId": {{tecnicoId}}
+}
+
+### Cancelamento depois de assumir: 409
+PATCH {{baseUrl}}/chamados/{{chamadoId}}/cancelar
+Content-Type: application/json
+
+{
+  "solicitanteId": {{solicitanteId}}
+}
+
+### Solucao vazia: 400
+PATCH {{baseUrl}}/chamados/{{chamadoId}}/resolver
+Content-Type: application/json
+
+{
+  "tecnicoId": {{tecnicoId}},
+  "solucao": " "
+}
+
+### Resolver pelo tecnico atribuido
+PATCH {{baseUrl}}/chamados/{{chamadoId}}/resolver
+Content-Type: application/json
+
+{
+  "tecnicoId": {{tecnicoId}},
+  "solucao": "Cabo do ponto de acesso substituido"
+}
+
+### Consultar chamado resolvido com as interacoes
+GET {{baseUrl}}/chamados/{{chamadoId}}
+
+### Interacao apos encerramento: 409
+POST {{baseUrl}}/chamados/{{chamadoId}}/interacoes
+Content-Type: application/json
+
+{
+  "texto": "Nova informacao",
+  "autorId": {{solicitanteId}}
+}
+
+### Abrir outro chamado para cancelar
+# @name abrirParaCancelar
+POST {{baseUrl}}/chamados
+Content-Type: application/json
+
+{
+  "titulo": "Computador sem conexao",
+  "descricao": "Nao consigo acessar a internet",
+  "local": "Sala 2",
+  "prioridade": "ALTA",
+  "solicitanteId": {{solicitanteId}},
+  "categoriaId": {{categoriaInicialId}}
+}
+
+### Cancelamento por outro solicitante: 409
+PATCH {{baseUrl}}/chamados/{{chamadoCancelarId}}/cancelar
+Content-Type: application/json
+
+{
+  "solicitanteId": {{outroSolicitanteId}}
+}
+
+### Cancelar pelo proprio solicitante
+PATCH {{baseUrl}}/chamados/{{chamadoCancelarId}}/cancelar
+Content-Type: application/json
+
+{
+  "solicitanteId": {{solicitanteId}}
+}
+
+### Consultar chamado cancelado
+GET {{baseUrl}}/chamados/{{chamadoCancelarId}}
+
+### Assumir chamado cancelado: 409
+PATCH {{baseUrl}}/chamados/{{chamadoCancelarId}}/assumir
+Content-Type: application/json
+
+{
+  "tecnicoId": {{tecnicoId}}
+}
