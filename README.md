@@ -13,7 +13,7 @@ API REST para registrar e acompanhar chamados de suporte do IFRN.
 
 ## Estado atual
 
-A estrutura inicial, as entidades e as migrations com dados iniciais estao prontas.
+A estrutura inicial, as entidades, as migrations, os DTOs e o tratamento de erros estao prontos.
 Os cadastros, as regras de negocio e a execucao com Docker Compose serao implementados nas proximas etapas.
 Ainda nao ha endpoints disponiveis.
 
@@ -27,6 +27,8 @@ Os pacotes ficam em `src/main/java/br/edu/ifrn/chamados`:
 | `service` | Aplicar as regras de negocio. |
 | `repository` | Acessar o banco com Spring Data JPA. |
 | `model` | Representar entidades e enums. |
+| `dto` | Definir os dados de entrada e saida da API. |
+| `exception` | Padronizar respostas de erro. |
 
 As dependencias entre classes serao recebidas pelo construtor, sem `@Autowired` em atributos.
 Os arquivos `package-info.java` documentam a responsabilidade de cada pacote.
@@ -134,3 +136,21 @@ migration com a proxima versao; nao alteramos as migrations ja aplicadas.
 Nao usamos `ddl-auto=update` em producao porque as alteracoes automaticas do
 Hibernate nao substituem um historico de SQL revisado e versionado. Aqui o Flyway
 altera o esquema e `ddl-auto=validate` confere se ele corresponde as entidades.
+
+## Validacoes e erros
+
+Os DTOs de entrada validam campos obrigatorios, email, limites de tamanho e IDs
+positivos. Os Controllers usarao `@Valid` ao receber esses DTOs nas proximas tasks.
+As regras de negocio continuam nos Services.
+
+Os erros retornam `timestamp`, `status`, `mensagem` e `caminho`. Dados invalidos
+retornam 400; recursos inexistentes, 404; conflitos de negocio ou integridade, 409.
+As excecoes dos Services serao `RecursoNaoEncontradoException` e `RegraNegocioException`.
+
+Para executar apenas os testes de validacao e tratamento de erros, sem banco:
+
+```powershell
+.\mvnw.cmd "-Dtest=ValidacaoDtosTests,ApiExceptionHandlerTests" test
+```
+
+Os Controllers usados nesses testes existem somente nos arquivos de teste.
