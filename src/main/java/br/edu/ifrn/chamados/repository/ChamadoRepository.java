@@ -27,6 +27,20 @@ public interface ChamadoRepository extends JpaRepository<Chamado, Long> {
     Page<Chamado> listar(StatusChamado status, Prioridade prioridade, Long setorId, Long categoriaId,
             Long solicitanteId, Long tecnicoId, LocalDateTime dataInicio, LocalDateTime dataFim, Pageable pageable);
 
+    @Query("""
+            select c from Chamado c
+            where c.solicitante.id = :usuarioId
+              and (:status is null or c.status = :status)
+            """)
+    Page<Chamado> listarPorSolicitante(Long usuarioId, StatusChamado status, Pageable pageable);
+
+    @Query("""
+            select c from Chamado c
+            where c.tecnico.id = :usuarioId
+              and (:status is null or c.status = :status)
+            """)
+    Page<Chamado> listarPorTecnico(Long usuarioId, StatusChamado status, Pageable pageable);
+
     boolean existsByCategoriaId(Long categoriaId);
 
     boolean existsByCategoriaSetorId(Long setorId);

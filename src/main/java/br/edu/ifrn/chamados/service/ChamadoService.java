@@ -52,6 +52,14 @@ public class ChamadoService {
                 filtro.dataInicio(), filtro.dataFim(), pageable).map(this::resumo);
     }
 
+    public Page<ChamadoResumoResponse> listarPorUsuario(Long usuarioId, StatusChamado status, Pageable pageable) {
+        Usuario usuario = buscarUsuario(usuarioId);
+        Page<Chamado> pagina = usuario.getTipo() == TipoUsuario.SOLICITANTE
+                ? chamadoRepository.listarPorSolicitante(usuarioId, status, pageable)
+                : chamadoRepository.listarPorTecnico(usuarioId, status, pageable);
+        return pagina.map(this::resumo);
+    }
+
     @Transactional
     public ChamadoResponse abrir(ChamadoRequest request) {
         Usuario solicitante = buscarUsuario(request.solicitanteId());

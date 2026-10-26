@@ -14,9 +14,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.edu.ifrn.chamados.dto.chamado.ChamadoResumoResponse;
 import br.edu.ifrn.chamados.dto.usuario.UsuarioRequest;
 import br.edu.ifrn.chamados.dto.usuario.UsuarioResponse;
+import br.edu.ifrn.chamados.model.StatusChamado;
 import br.edu.ifrn.chamados.model.TipoUsuario;
+import br.edu.ifrn.chamados.service.ChamadoService;
 import br.edu.ifrn.chamados.service.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 public class UsuarioController {
 
     private final UsuarioService usuarioService;
+    private final ChamadoService chamadoService;
 
     @GetMapping
     public Page<UsuarioResponse> listar(@RequestParam(required = false) String nome,
@@ -38,6 +42,12 @@ public class UsuarioController {
     @GetMapping("/{id}")
     public UsuarioResponse buscar(@PathVariable Long id) {
         return usuarioService.buscar(id);
+    }
+
+    @GetMapping("/{id}/chamados")
+    public Page<ChamadoResumoResponse> listarChamados(@PathVariable Long id,
+            @RequestParam(required = false) StatusChamado status, Pageable pageable) {
+        return chamadoService.listarPorUsuario(id, status, pageable);
     }
 
     @PostMapping
