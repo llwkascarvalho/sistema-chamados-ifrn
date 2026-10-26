@@ -2,16 +2,21 @@ package br.edu.ifrn.chamados.service;
 
 import java.time.LocalDateTime;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.edu.ifrn.chamados.dto.chamado.AssumirChamadoRequest;
 import br.edu.ifrn.chamados.dto.chamado.CancelarChamadoRequest;
+import br.edu.ifrn.chamados.dto.chamado.ChamadoFiltro;
 import br.edu.ifrn.chamados.dto.chamado.ChamadoRequest;
+import br.edu.ifrn.chamados.dto.chamado.ChamadoResumoResponse;
 import br.edu.ifrn.chamados.dto.chamado.ChamadoResponse;
 import br.edu.ifrn.chamados.dto.chamado.InteracaoRequest;
 import br.edu.ifrn.chamados.dto.chamado.InteracaoResponse;
 import br.edu.ifrn.chamados.dto.chamado.ResolverChamadoRequest;
+import br.edu.ifrn.chamados.exception.DadosInvalidosException;
 import br.edu.ifrn.chamados.exception.RecursoNaoEncontradoException;
 import br.edu.ifrn.chamados.exception.RegraNegocioException;
 import br.edu.ifrn.chamados.model.Categoria;
@@ -36,6 +41,16 @@ public class ChamadoService {
     private final UsuarioRepository usuarioRepository;
     private final CategoriaRepository categoriaRepository;
     private final InteracaoRepository interacaoRepository;
+
+    public Page<ChamadoResumoResponse> listar(ChamadoFiltro filtro, Pageable pageable) {
+        if (filtro.dataInicio() != null && filtro.dataFim() != null
+                && filtro.dataInicio().isAfter(filtro.dataFim())) {
+            throw new DadosInvalidosException("Data inicial deve ser anterior ou igual a data final");
+        }
+        return chamadoRepository.listar(filtro.status(), filtro.prioridade(), filtro.setorId(),
+                filtro.categoriaId(), filtro.solicitanteId(), filtro.tecnicoId(),
+                filtro.dataInicio(), filtro.dataFim(), pageable).map(this::resumo);
+    }
 
     @Transactional
     public ChamadoResponse abrir(ChamadoRequest request) {
@@ -144,6 +159,13 @@ public class ChamadoService {
     private Usuario buscarUsuario(Long id) {
         return usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuario nao encontrado"));
+    }
+
+    private ChamadoResumoResponse resumo(Chamado chamado) {
+        Long tecnicoId = chamado.getTecnico() == null ? null : chamado.getTecnico().getId();
+        return new ChamadoResumoResponse(chamado.getId(), chamado.getTitulo(), chamado.getLocal(),
+                chamado.getPrioridade(), chamado.getStatus(), chamado.getDataAbertura(), chamado.getDataFechamento(),
+                chamado.getSolicitante().getId(), chamado.getCategoria().getId(), tecnicoId);
     }
 
     private ChamadoResponse resposta(Chamado chamado) {
