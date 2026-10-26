@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: chamados
+      POSTGRES_USER: chamados
+      POSTGRES_PASSWORD: chamados_local
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/chamados
+      DB_USERNAME: chamados
+      DB_PASSWORD: chamados_local
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
