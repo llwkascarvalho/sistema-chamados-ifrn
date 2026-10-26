@@ -13,9 +13,9 @@ API REST para registrar e acompanhar chamados de suporte do IFRN.
 
 ## Estado atual
 
-A persistencia, as validacoes, os cadastros e o fluxo dos chamados estao prontos.
-As listagens de chamados, seus filtros e a execucao com Docker Compose ficam
-para as proximas etapas.
+A persistencia, as validacoes, os cadastros, o fluxo dos chamados e as listagens
+com filtros estao prontos. Faltam a execucao com Docker Compose e a conferencia
+final da entrega.
 
 ## Organizacao
 
@@ -208,7 +208,9 @@ ao terminar.
 | Metodo e rota | Operacao | Sucesso |
 | --- | --- | --- |
 | POST `/chamados` | Abrir um chamado | 201 |
+| GET `/chamados` | Listar chamados com paginacao e filtros | 200 |
 | GET `/chamados/{id}` | Consultar detalhes e interacoes | 200 |
+| GET `/usuarios/{id}/chamados` | Consultar chamados do usuario | 200 |
 | PATCH `/chamados/{id}/assumir` | Atribuir o chamado ao tecnico | 200 |
 | PATCH `/chamados/{id}/resolver` | Resolver com uma solucao | 200 |
 | PATCH `/chamados/{id}/cancelar` | Cancelar pelo solicitante | 200 |
@@ -252,12 +254,56 @@ Content-Type: application/json
 Para testar todos os Controllers, Services, validacoes e erros sem banco:
 
 ```powershell
-.\mvnw.cmd "-Dtest=ChamadoServiceTests,ChamadoControllerTests,CadastroServiceTests,CadastroControllerTests,ValidacaoDtosTests,ApiExceptionHandlerTests" test
+.\mvnw.cmd "-Dtest=*ServiceTests,*ControllerTests,ValidacaoDtosTests,ApiExceptionHandlerTests" test
 ```
 
 Com o PostgreSQL configurado, `.\mvnw.cmd clean verify` tambem verifica os fluxos
 completos de resolucao e cancelamento, a recuperacao do historico e os bloqueios
 apos encerramento. Esses testes desfazem seus dados ao terminar.
 
-As rotas GET `/chamados` e GET `/usuarios/{id}/chamados`, com paginacao e filtros,
-serao implementadas na proxima task.
+## Listagens e filtros
+
+Todas as seis rotas de listagem aceitam `page`, `size` e `sort`, com pagina inicial
+0, tamanho padrao 10 e limite de 50 itens. A resposta inclui `content`, `number`,
+`size`, `totalElements` e `totalPages`. Uma pagina sem resultados retorna 200 com
+`content` vazio.
+
+GET `/chamados` aceita os filtros opcionais abaixo. Quando varios sao informados,
+o chamado precisa atender a todos; parametros omitidos sao ignorados.
+
+| Filtro | Conteudo |
+| --- | --- |
+| `status` | ABERTO, EM_ATENDIMENTO, RESOLVIDO ou CANCELADO |
+| `prioridade` | BAIXA, MEDIA ou ALTA |
+| `setorId` | ID do setor responsavel pela categoria |
+| `categoriaId` | ID da categoria |
+| `solicitanteId` | ID de quem abriu o chamado |
+| `tecnicoId` | ID do tecnico atribuido |
+| `dataInicio` | Inicio do periodo de abertura, em formato ISO com horario |
+| `dataFim` | Fim do periodo de abertura, em formato ISO com horario |
+
+Os dois limites de data sao inclusivos e podem ser usados separadamente.
+Exemplo de data: `2026-10-01T00:00:00`. Uma data invalida, um ID de filtro nao
+positivo, um enum invalido ou um intervalo com inicio posterior ao fim retorna 400.
+
+GET `/usuarios/{id}/chamados` aceita `status` como filtro opcional. Para um
+solicitante, retorna os chamados abertos por ele. Para um tecnico, retorna somente
+os chamados atribuidos a ele. Usuario inexistente retorna 404; usuario existente
+sem chamados correspondentes recebe uma pagina vazia.
+
+As duas listagens de chamados retornam um resumo com IDs dos participantes,
+categoria, prioridade, status e datas. As interacoes ficam na consulta detalhada
+GET `/chamados/{id}`.
+
+Exemplos:
+
+```http
+GET http://localhost:8080/chamados?status=ABERTO&setorId=1&prioridade=ALTA&page=0&size=10&sort=dataAbertura,desc
+GET http://localhost:8080/chamados?dataInicio=2026-10-01T00:00:00&dataFim=2026-10-31T23:59:59.999999
+GET http://localhost:8080/usuarios/1/chamados?status=ABERTO&page=0&size=10&sort=id,asc
+```
+
+Os testes com PostgreSQL verificam combinacoes dos oito filtros, parametros
+omitidos, limites de datas, contagem e ordenacao. Tambem conferem, pelo contexto
+real da aplicacao, os limites de pagina nas seis rotas de listagem. Eles entram
+em `.\mvnw.cmd clean verify` e desfazem seus dados ao terminar.
