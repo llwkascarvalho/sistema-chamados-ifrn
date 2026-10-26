@@ -9,13 +9,71 @@ API REST para registrar e acompanhar chamados de suporte do IFRN.
 - Maven (Wrapper incluido no projeto)
 - Spring Web MVC, Spring Data JPA e Bean Validation
 - PostgreSQL e Flyway
+- Docker e Docker Compose
 - Lombok
 
 ## Estado atual
 
 A persistencia, as validacoes, os cadastros, o fluxo dos chamados e as listagens
-com filtros estao prontos. Faltam a execucao com Docker Compose e a conferencia
-final da entrega.
+com filtros estao implementados. O Dockerfile e o Compose estao disponiveis;
+a conferencia final da entrega fica para a ultima etapa.
+
+## Executar com Docker
+
+Com o Docker Desktop iniciado, abra o terminal na raiz deste projeto e execute:
+
+```powershell
+docker compose up
+```
+
+O build, a API e o PostgreSQL rodam nos containers. Na primeira execucao, o Docker
+baixa as imagens e o Maven baixa as dependencias do projeto durante o build.
+Nao e preciso criar `.env`, banco ou tabelas manualmente.
+
+A API espera o healthcheck do PostgreSQL passar antes de iniciar. O Flyway aplica
+as migrations e o Hibernate valida o esquema. Quando o log indicar que a aplicacao
+iniciou, consulte `http://localhost:8080/setores` em outro terminal:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/setores
+```
+
+A porta 8080 precisa estar livre. Se a API estiver rodando pelo Maven, encerre
+esse processo antes de subir o Compose.
+
+Comandos uteis:
+
+```powershell
+docker compose ps
+docker compose logs -f api
+docker compose down
+```
+
+O banco usa o volume `postgres_data`. `docker compose down` encerra os containers
+e preserva os dados para a proxima execucao. Esse volume e separado do container
+`chamados-postgres` usado nos testes locais.
+
+O PostgreSQL fica na rede interna do Compose, sem publicar a porta 5432 no PC.
+A conexao da API usa o nome do servico `postgres` e as variaveis `DB_URL`,
+`DB_USERNAME` e `DB_PASSWORD` definidas no Compose. Os valores sao exemplos locais
+para a atividade.
+
+Para conferir as migrations aplicadas:
+
+```powershell
+docker compose exec postgres psql -U chamados -d chamados -c "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank;"
+```
+
+Depois de alterar o codigo, reconstrua a imagem:
+
+```powershell
+docker compose up --build
+```
+
+O Dockerfile compila o projeto com Maven e JDK 21 no primeiro estagio. A imagem
+final recebe o JAR e usa JRE 21 com usuario sem privilegios. O build usa
+`-DskipTests` porque os testes de persistencia precisam de PostgreSQL; a suite
+completa e executada separadamente conforme as instrucoes abaixo.
 
 ## Organizacao
 
@@ -64,10 +122,12 @@ A aplicacao recebe a conexao por variaveis de ambiente:
 | `DB_USERNAME` | Usuario do PostgreSQL. |
 | `DB_PASSWORD` | Senha do PostgreSQL. |
 
-Nao coloque credenciais no `application.properties` nem no Git. Arquivos `.env`
-sao ignorados, mas o Spring Boot nao os carrega automaticamente.
+As credenciais reais devem ficar fora do versionamento. O Compose define valores
+locais de exemplo para a atividade; o `application.properties` recebe os valores
+por variaveis de ambiente. Arquivos `.env` sao ignorados e o Spring Boot nao os
+carrega automaticamente.
 
-O Flyway ficara responsavel por criar e evoluir o banco. O Hibernate usa
+O Flyway cria e evolui o banco. O Hibernate usa
 `ddl-auto=validate`, portanto nao cria nem altera tabelas. As migrations ficam em
 `src/main/resources/db/migration`: `V1` cria as tabelas e `V2` insere os dados iniciais.
 Sao 2 setores, 4 categorias e 4 usuarios ficticios: 2 solicitantes e 2 tecnicos.
@@ -123,7 +183,7 @@ Para iniciar a aplicacao depois dos testes:
 ```
 
 A raiz nao tem endpoint. Para conferir a API, acesse `http://localhost:8080/setores`.
-O Docker Compose que iniciara toda a aplicacao sera adicionado na task de Docker.
+O banco deste fluxo de testes e separado do banco usado pelo Docker Compose.
 
 ## Migrations
 
