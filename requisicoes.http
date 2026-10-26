@@ -282,3 +282,46 @@ Content-Type: application/json
 {
   "tecnicoId": {{tecnicoId}}
 }
+
+
+### Listar chamados com paginacao e ordenacao
+GET {{baseUrl}}/chamados?page=0&size=10&sort=dataAbertura,desc
+
+### Combinar status, prioridade e setor
+GET {{baseUrl}}/chamados?status=ABERTO&prioridade=ALTA&setorId=1&page=0&size=10
+
+### Combinar os oito filtros
+GET {{baseUrl}}/chamados?status=RESOLVIDO&prioridade=MEDIA&setorId=1&categoriaId={{categoriaInicialId}}&solicitanteId={{solicitanteId}}&tecnicoId={{tecnicoId}}&dataInicio=2026-10-01T00:00:00&dataFim=2026-10-31T23:59:59.999999&page=0&size=10&sort=dataAbertura,desc
+
+### Filtrar apenas pelo inicio do periodo
+GET {{baseUrl}}/chamados?dataInicio=2026-10-01T00:00:00
+
+### Filtrar apenas pelo fim do periodo
+GET {{baseUrl}}/chamados?dataFim=2026-10-31T23:59:59.999999
+
+### Conferir limite de pagina (retorna size 50)
+GET {{baseUrl}}/chamados?size=100
+
+### Chamados abertos pelo solicitante
+GET {{baseUrl}}/usuarios/{{solicitanteId}}/chamados?page=0&size=10&sort=dataAbertura,desc
+
+### Chamados do solicitante filtrados por status
+GET {{baseUrl}}/usuarios/{{solicitanteId}}/chamados?status=RESOLVIDO&page=0&size=10
+
+### Chamados atribuidos ao tecnico
+GET {{baseUrl}}/usuarios/{{tecnicoId}}/chamados?page=0&size=10&sort=dataAbertura,desc
+
+### Intervalo invertido: 400
+GET {{baseUrl}}/chamados?dataInicio=2026-10-10T00:00:00&dataFim=2026-10-01T00:00:00
+
+### Enum de filtro invalido: 400
+GET {{baseUrl}}/chamados?status=INVALIDO
+
+### Data invalida: 400
+GET {{baseUrl}}/chamados?dataInicio=ontem
+
+### ID de filtro invalido: 400
+GET {{baseUrl}}/chamados?setorId=-1
+
+### Usuario inexistente: 404
+GET {{baseUrl}}/usuarios/9223372036854775807/chamados

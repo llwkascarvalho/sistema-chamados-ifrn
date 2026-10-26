@@ -27,6 +27,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return resposta(HttpStatus.NOT_FOUND, ex.getMessage(), request);
     }
 
+    @ExceptionHandler(DadosInvalidosException.class)
+    public ResponseEntity<Object> tratarDadosInvalidos(DadosInvalidosException ex, WebRequest request) {
+        return resposta(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(RegraNegocioException.class)
     public ResponseEntity<Object> tratarRegraNegocio(RegraNegocioException ex, WebRequest request) {
         return resposta(HttpStatus.CONFLICT, ex.getMessage(), request);

@@ -42,6 +42,7 @@ import br.edu.ifrn.chamados.exception.RecursoNaoEncontradoException;
 import br.edu.ifrn.chamados.exception.RegraNegocioException;
 import br.edu.ifrn.chamados.model.TipoUsuario;
 import br.edu.ifrn.chamados.service.CategoriaService;
+import br.edu.ifrn.chamados.service.ChamadoService;
 import br.edu.ifrn.chamados.service.SetorService;
 import br.edu.ifrn.chamados.service.UsuarioService;
 
@@ -51,6 +52,7 @@ class CadastroControllerTests {
     @Mock private SetorService setores;
     @Mock private CategoriaService categorias;
     @Mock private UsuarioService usuarios;
+    @Mock private ChamadoService chamados;
 
     private MockMvc mockMvc;
     private LocalValidatorFactoryBean validator;
@@ -63,7 +65,7 @@ class CadastroControllerTests {
         pageable.setFallbackPageable(PageRequest.of(0, 10));
         pageable.setMaxPageSize(50);
         mockMvc = MockMvcBuilders.standaloneSetup(new SetorController(setores, categorias),
-                new CategoriaController(categorias), new UsuarioController(usuarios))
+                new CategoriaController(categorias), new UsuarioController(usuarios, chamados))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .setCustomArgumentResolvers(pageable)
                 .setValidator(validator).build();
