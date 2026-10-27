@@ -1,169 +1,147 @@
 # Sistema de Chamados do IFRN
 
-Projeto individual da disciplina de Desenvolvimento de Sistemas Corporativos (DSC).
-API REST para registrar e acompanhar chamados de suporte do IFRN.
+API REST da disciplina de Desenvolvimento de Sistemas Corporativos (DSC) para
+registrar pedidos de suporte, atribuir técnicos e acompanhar o atendimento.
 
-## Tecnologias
+Java 21, Spring Boot 4, Maven, Spring Web, JPA, Validation, PostgreSQL, Flyway e
+Docker Compose. O projeto também usa Lombok.
 
-- Java 21 e Spring Boot 4
-- Maven (Wrapper incluido no projeto)
-- Spring Web MVC, Spring Data JPA e Bean Validation
-- PostgreSQL e Flyway
-- Docker e Docker Compose
-- Lombok
+## Executar
 
-## Estado atual
+Com o Docker Desktop iniciado:
 
-A persistencia, as validacoes, os cadastros, o fluxo dos chamados e as listagens
-com filtros estao implementados. O Dockerfile e o Compose estao disponiveis;
-a conferencia final da entrega fica para a ultima etapa.
-
-## Executar com Docker
-
-Com o Docker Desktop iniciado, abra o terminal na raiz deste projeto e execute:
-
-```powershell
+```bash
+git clone https://github.com/llwkascarvalho/sistema-chamados-ifrn.git
+cd sistema-chamados-ifrn
 docker compose up
 ```
 
-O build, a API e o PostgreSQL rodam nos containers. Na primeira execucao, o Docker
-baixa as imagens e o Maven baixa as dependencias do projeto durante o build.
-Nao e preciso criar `.env`, banco ou tabelas manualmente.
+A primeira execução baixa as imagens e as dependências. A API aguarda o banco
+ficar saudável, aplica as migrations e responde em `http://localhost:8080`.
+Não é necessário criar `.env`, banco ou tabelas manualmente. A porta 8080 deve
+estar livre.
 
-A API espera o healthcheck do PostgreSQL passar antes de iniciar. O Flyway aplica
-as migrations e o Hibernate valida o esquema. Quando o log indicar que a aplicacao
-iniciou, consulte `http://localhost:8080/setores` em outro terminal:
+Após a inicialização, confira em outro terminal:
 
 ```powershell
 Invoke-RestMethod http://localhost:8080/setores
 ```
 
-A porta 8080 precisa estar livre. Se a API estiver rodando pelo Maven, encerre
-esse processo antes de subir o Compose.
+O PostgreSQL fica na rede interna do Compose e usa um volume persistente.
+`docker compose down` encerra os containers e mantém os dados. Para reconstruir
+a imagem após alterar o código, use `docker compose up --build`.
 
-Comandos uteis:
+## Requisições
 
-```powershell
-docker compose ps
-docker compose logs -f api
-docker compose down
-```
+O arquivo [requisicoes.http](requisicoes.http) contém todas as 23 rotas, fluxos
+válidos e exemplos de erro. No VS Code, use a extensão REST Client e execute na
+ordem do arquivo. Os títulos indicam os erros esperados. Os cadastros e chamados
+desses exemplos ficam no banco; o email de teste usa um identificador gerado
+para permitir uma nova execução.
 
-O banco usa o volume `postgres_data`. `docker compose down` encerra os containers
-e preserva os dados para a proxima execucao. Esse volume e separado do container
-`chamados-postgres` usado nos testes locais.
+Os IDs de usuários e setor usados nos exemplos vêm da migration inicial:
+solicitantes 1 e 2; técnicos 3 e 4, dos setores 1 e 2, respectivamente.
+Ajuste as variáveis do início do arquivo se esses registros forem alterados.
 
-O PostgreSQL fica na rede interna do Compose, sem publicar a porta 5432 no PC.
-A conexao da API usa o nome do servico `postgres` e as variaveis `DB_URL`,
-`DB_USERNAME` e `DB_PASSWORD` definidas no Compose. Os valores sao exemplos locais
-para a atividade.
-
-Para conferir as migrations aplicadas:
-
-```powershell
-docker compose exec postgres psql -U chamados -d chamados -c "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank;"
-```
-
-Depois de alterar o codigo, reconstrua a imagem:
-
-```powershell
-docker compose up --build
-```
-
-O Dockerfile compila o projeto com Maven e JDK 21 no primeiro estagio. A imagem
-final recebe o JAR e usa JRE 21 com usuario sem privilegios. O build usa
-`-DskipTests` porque os testes de persistencia precisam de PostgreSQL; a suite
-completa e executada separadamente conforme as instrucoes abaixo.
-
-## Organizacao
-
-Os pacotes ficam em `src/main/java/br/edu/ifrn/chamados`:
-
-| Pacote | Responsabilidade |
+| Recurso | Rotas |
 | --- | --- |
-| `controller` | Receber requisicoes, chamar o Service e devolver respostas. |
-| `service` | Aplicar as regras de negocio. |
-| `repository` | Acessar o banco com Spring Data JPA. |
-| `model` | Representar entidades e enums. |
-| `dto` | Definir os dados de entrada e saida da API. |
-| `exception` | Padronizar respostas de erro. |
+| Setores | POST e GET `/setores`; GET, PUT e DELETE `/setores/{id}` |
+| Categorias | POST e GET `/categorias`; GET, PUT e DELETE `/categorias/{id}` |
+| Categorias de um setor | GET `/setores/{id}/categorias` |
+| Usuários | POST e GET `/usuarios`; GET e PUT `/usuarios/{id}` |
+| Abertura e consulta de chamados | POST e GET `/chamados`; GET `/chamados/{id}` |
+| Chamados do usuário | GET `/usuarios/{id}/chamados` |
+| Assumir | PATCH `/chamados/{id}/assumir` |
+| Resolver | PATCH `/chamados/{id}/resolver` |
+| Cancelar | PATCH `/chamados/{id}/cancelar` |
+| Interações | POST `/chamados/{id}/interacoes` |
 
-As dependencias entre classes serao recebidas pelo construtor, sem `@Autowired` em atributos.
-Os arquivos `package-info.java` documentam a responsabilidade de cada pacote.
+POST retorna 201; consultas e atualizações retornam 200; exclusões retornam 204.
+O detalhe do chamado inclui suas interações. As transições permitidas são
+`ABERTO → EM_ATENDIMENTO → RESOLVIDO` e `ABERTO → CANCELADO`.
+Não há autenticação: o corpo informa `solicitanteId`, `tecnicoId` ou `autorId`.
 
-## Compilar
+## Paginação e filtros
 
-Requer JDK 21. Na primeira execucao, o Maven Wrapper precisa de internet para baixar
-o Maven e as dependencias.
+Todas as listagens aceitam `page`, `size` e `sort`. A página inicial é 0, o tamanho
+padrão é 10 e o máximo é 50. A resposta inclui `content`, `number`, `size`,
+`totalElements` e `totalPages`.
 
-No PowerShell, dentro da pasta do projeto:
+| Listagem | Filtros opcionais |
+| --- | --- |
+| `/setores` | `nome` |
+| `/categorias` | `nome`, `setorId` |
+| `/setores/{id}/categorias` | `nome` |
+| `/usuarios` | `nome`, `tipo`, `setorId` |
+| `/chamados` | `status`, `prioridade`, `setorId`, `categoriaId`, `solicitanteId`, `tecnicoId`, `dataInicio`, `dataFim` |
+| `/usuarios/{id}/chamados` | `status` |
+
+Os filtros se combinam; os omitidos são ignorados. A busca por nome usa trecho
+e não diferencia maiúsculas de minúsculas. As datas usam formato ISO com horário,
+como `2026-10-01T00:00:00`; ambos os limites são inclusivos e podem ser usados
+separadamente. Um início posterior ao fim retorna 400.
+
+Prioridades: `BAIXA`, `MEDIA`, `ALTA`. Status: `ABERTO`, `EM_ATENDIMENTO`,
+`RESOLVIDO`, `CANCELADO`. Tipos de usuário: `SOLICITANTE`, `TECNICO`.
+A consulta por usuário retorna os chamados abertos pelo solicitante ou os
+atribuídos ao técnico.
+
+```http
+GET http://localhost:8080/chamados?status=ABERTO&setorId=1&prioridade=ALTA&page=0&size=10&sort=dataAbertura,desc
+GET http://localhost:8080/usuarios/1/chamados?status=RESOLVIDO
+```
+
+## Erros e regras
+
+Os erros retornam `timestamp`, `status`, `mensagem` e `caminho`:
+400 para dados inválidos, 404 para recurso inexistente e 409 para conflitos de
+negócio ou integridade, como email duplicado ou técnico de outro setor.
+
+Um chamado nasce ABERTO, com data do sistema e prioridade MEDIA quando omitida.
+Somente solicitantes podem abrir chamados; o técnico deve pertencer ao setor da
+categoria para assumir e somente o atribuído pode resolver, informando a solução.
+O próprio solicitante pode cancelar enquanto ABERTO. Apenas os participantes
+registram interações; chamados encerrados bloqueiam novas ações e interações.
+
+Setores e categorias com chamados não podem ser excluídos. Setores também exigem
+que categorias e usuários sejam removidos ou reatribuídos antes da exclusão,
+preservando os vínculos do banco.
+
+## Organização e banco
+
+Os pacotes `controller`, `service`, `repository` e `model` separam as camadas.
+As regras ficam nos Services, a injeção usa construtores e os DTOs em `record`
+representam entradas e saídas. O `@RestControllerAdvice` padroniza os erros.
+
+A conexão vem de `DB_URL`, `DB_USERNAME` e `DB_PASSWORD`. O Compose fornece
+valores locais de exemplo. O PostgreSQL do Compose usa um volume próprio,
+separado do banco de desenvolvimento usado nos testes abaixo.
+
+As migrations ficam em `src/main/resources/db/migration`. V1 cria as cinco
+tabelas; V2 insere dois setores, quatro categorias e quatro usuários.
+O Flyway registra versões e checksums em `flyway_schema_history`. Alterar uma
+migration aplicada muda seu checksum e faz a validação falhar; correções entram
+em uma nova versão. O Hibernate usa `ddl-auto=validate` para conferir o esquema.
+`ddl-auto=update` não substitui migrations em produção, pois não mantém um
+histórico SQL revisado e versionado das alterações.
+
+## Testes (opcional)
+
+Requer JDK 21. Para executar os testes sem banco no PowerShell:
 
 ```powershell
-.\mvnw.cmd clean package -DskipTests
+.\mvnw.cmd "-Dtest=*ServiceTests,*ControllerTests,ValidacaoDtosTests,ApiExceptionHandlerTests" test
 ```
 
-No Linux ou macOS:
-
-```bash
-./mvnw clean package -DskipTests
-```
-
-Esse comando verifica a compilacao e gera o JAR em `target/`. Os testes nao sao
-executados com `-DskipTests`. Para executar a suite completa, configure o PostgreSQL
-e use `clean verify`, como explicado abaixo.
-
-## Configuracao do banco
-
-A aplicacao recebe a conexao por variaveis de ambiente:
-
-| Variavel | Conteudo |
-| --- | --- |
-| `DB_URL` | URL JDBC, por exemplo `jdbc:postgresql://localhost:5432/chamados`. |
-| `DB_USERNAME` | Usuario do PostgreSQL. |
-| `DB_PASSWORD` | Senha do PostgreSQL. |
-
-As credenciais reais devem ficar fora do versionamento. O Compose define valores
-locais de exemplo para a atividade; o `application.properties` recebe os valores
-por variaveis de ambiente. Arquivos `.env` sao ignorados e o Spring Boot nao os
-carrega automaticamente.
-
-O Flyway cria e evolui o banco. O Hibernate usa
-`ddl-auto=validate`, portanto nao cria nem altera tabelas. As migrations ficam em
-`src/main/resources/db/migration`: `V1` cria as tabelas e `V2` insere os dados iniciais.
-Sao 2 setores, 4 categorias e 4 usuarios ficticios: 2 solicitantes e 2 tecnicos.
-
-As listagens usam paginas de 10 itens por padrao, com limite de 50.
-
-## Desenvolvimento
-
-Usaremos uma branch por task e commits pequenos, agrupados por mudanca com sentido.
-Ao concluir e conferir a task, abriremos um Pull Request para a `main`.
-Nao e necessario criar uma branch `develop` neste projeto individual.
-
-Exemplos de branches: `chore/estrutura-inicial`, `feat/persistencia` e `feat/cadastros`.
-Exemplos de commits: `feat: adiciona entidade Setor` e `fix: impede email duplicado`.
-
-A entrega final sera a versao disponivel na `main`, com Docker Compose,
-exemplos de requisicao e as orientacoes completas de execucao.
-
-
-## Validar a persistencia localmente
-
-Com o Docker Desktop iniciado, crie um PostgreSQL de desenvolvimento (uma unica vez):
+Para a suíte completa, crie um PostgreSQL de desenvolvimento uma vez:
 
 ```powershell
 docker run --name chamados-postgres -e POSTGRES_DB=chamados -e POSTGRES_USER=chamados -e POSTGRES_PASSWORD=chamados_local -p 5432:5432 -d postgres:17
 ```
 
-A senha acima e apenas um exemplo para o banco local de desenvolvimento.
-Se o container ja existir e estiver parado, use `docker start chamados-postgres`.
-Espere o banco ficar pronto antes de executar os testes:
-
-```powershell
-docker exec chamados-postgres pg_isready -U chamados -d chamados
-```
-
-Defina as variaveis na mesma sessao do PowerShell:
+Se ele já existir, use `docker start chamados-postgres`. Aguarde
+`docker exec chamados-postgres pg_isready -U chamados -d chamados` indicar
+`accepting connections` e execute na mesma sessão:
 
 ```powershell
 $env:DB_URL = "jdbc:postgresql://localhost:5432/chamados"
@@ -172,198 +150,6 @@ $env:DB_PASSWORD = "chamados_local"
 .\mvnw.cmd clean verify
 ```
 
-Os testes usam um PostgreSQL de desenvolvimento. O Flyway aplica as migrations e
-o Hibernate valida o mapeamento. O teste de persistencia verifica os relacionamentos
-e desfaz os registros criados no teste ao terminar.
-
-Para iniciar a aplicacao depois dos testes:
-
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-A raiz nao tem endpoint. Para conferir a API, acesse `http://localhost:8080/setores`.
-O banco deste fluxo de testes e separado do banco usado pelo Docker Compose.
-
-## Migrations
-
-O Flyway registra cada migration aplicada na tabela `flyway_schema_history`,
-incluindo a versao e o checksum do arquivo. Se uma migration aplicada for editada,
-o checksum muda e a validacao falha. Por isso, correcoes entram em uma nova
-migration com a proxima versao; nao alteramos as migrations ja aplicadas.
-
-Nao usamos `ddl-auto=update` em producao porque as alteracoes automaticas do
-Hibernate nao substituem um historico de SQL revisado e versionado. Aqui o Flyway
-altera o esquema e `ddl-auto=validate` confere se ele corresponde as entidades.
-
-## Validacoes e erros
-
-Os DTOs de entrada validam campos obrigatorios, email, limites de tamanho e IDs
-positivos. Os Controllers dos cadastros usam `@Valid` ao receber esses DTOs.
-As regras de negocio continuam nos Services.
-
-Os erros retornam `timestamp`, `status`, `mensagem` e `caminho`. Dados invalidos
-retornam 400; recursos inexistentes, 404; conflitos de negocio ou integridade, 409.
-Os Services usam `RecursoNaoEncontradoException` e `RegraNegocioException`.
-
-Para executar apenas os testes de validacao e tratamento de erros, sem banco:
-
-```powershell
-.\mvnw.cmd "-Dtest=ValidacaoDtosTests,ApiExceptionHandlerTests" test
-```
-
-O Controller auxiliar de `ApiExceptionHandlerTests` existe somente no teste.
-
-## Cadastros
-
-| Recurso | Rotas | Filtros da listagem |
-| --- | --- | --- |
-| Setores | POST e GET `/setores`; GET, PUT e DELETE `/setores/{id}` | `nome` |
-| Categorias | POST e GET `/categorias`; GET, PUT e DELETE `/categorias/{id}` | `nome`, `setorId` |
-| Categorias de um setor | GET `/setores/{id}/categorias` | `nome` |
-| Usuarios | POST e GET `/usuarios`; GET e PUT `/usuarios/{id}` | `nome`, `tipo`, `setorId` |
-
-POST retorna 201 com o endereco do recurso em `Location`; consultas e atualizacoes
-retornam 200; exclusoes retornam 204. Nao ha DELETE de usuarios.
-
-As listagens aceitam `page`, `size` e `sort`. O JSON inclui `content`, `number`,
-`size`, `totalElements` e `totalPages`. Os filtros podem ser combinados e o nome
-e buscado por trecho, sem diferenciar maiusculas de minusculas.
-
-Exemplos:
-
-```http
-GET http://localhost:8080/setores?nome=tecnologia&page=0&size=10&sort=nome,asc
-GET http://localhost:8080/categorias?nome=rede&setorId=1
-GET http://localhost:8080/usuarios?tipo=TECNICO&setorId=1
-```
-
-Sigla e email duplicados retornam 409, inclusive quando mudam apenas maiusculas
-e minusculas. A atualizacao permite manter a sigla ou o email do proprio cadastro.
-Tecnicos precisam de um setor; setor informado e inexistente retorna 404.
-
-Setores e categorias com chamados nao podem ser excluidos, independentemente do
-status do chamado. Setores com categorias ou usuarios vinculados tambem retornam
-409: remova ou reatribua esses vinculos antes de excluir, sem apagar dados em cascata.
-
-O arquivo `requisicoes.http` contem as operacoes dos cadastros e os fluxos dos
-chamados. Com a extensao REST Client no VS Code, execute as requisicoes na ordem
-do arquivo; os IDs dos novos registros sao reaproveitados nas requisicoes seguintes.
-A secao de chamados usa os usuarios e a categoria da migration V2; ajuste as
-variaveis do inicio do arquivo se esses registros tiverem sido alterados.
-
-Para testar Controllers, Services, validacoes e erros sem PostgreSQL:
-
-```powershell
-.\mvnw.cmd "-Dtest=CadastroServiceTests,CadastroControllerTests,ValidacaoDtosTests,ApiExceptionHandlerTests" test
-```
-
-Com o banco e as variaveis de ambiente configurados, `./mvnw clean verify`
-(ou `.\mvnw.cmd clean verify` no PowerShell) tambem executa os testes de persistencia
-dos cadastros, filtros e bloqueios de exclusao. Os dados desses testes sao desfeitos
-ao terminar.
-
-## Fluxo dos chamados
-
-| Metodo e rota | Operacao | Sucesso |
-| --- | --- | --- |
-| POST `/chamados` | Abrir um chamado | 201 |
-| GET `/chamados` | Listar chamados com paginacao e filtros | 200 |
-| GET `/chamados/{id}` | Consultar detalhes e interacoes | 200 |
-| GET `/usuarios/{id}/chamados` | Consultar chamados do usuario | 200 |
-| PATCH `/chamados/{id}/assumir` | Atribuir o chamado ao tecnico | 200 |
-| PATCH `/chamados/{id}/resolver` | Resolver com uma solucao | 200 |
-| PATCH `/chamados/{id}/cancelar` | Cancelar pelo solicitante | 200 |
-| POST `/chamados/{id}/interacoes` | Registrar andamento ou mais detalhes | 201 |
-
-As regras ficam no `ChamadoService`. O sistema preenche as datas, abre o chamado
-com status `ABERTO` e usa prioridade `MEDIA` quando ela nao e informada.
-Somente usuarios do tipo `SOLICITANTE` podem abrir chamados.
-
-| Acao | Status exigido | Quem pode executar | Novo status |
-| --- | --- | --- | --- |
-| Assumir | ABERTO | Tecnico do setor da categoria | EM_ATENDIMENTO |
-| Resolver | EM_ATENDIMENTO | Tecnico atribuido, informando a solucao | RESOLVIDO |
-| Cancelar | ABERTO | Proprio solicitante | CANCELADO |
-| Registrar interacao | ABERTO ou EM_ATENDIMENTO | Solicitante ou tecnico atribuido | Sem alteracao |
-
-A resolucao e o cancelamento preenchem `dataFechamento`. Chamados encerrados nao
-aceitam novas acoes nem interacoes. As transicoes invalidas e as acoes de usuarios
-sem permissao retornam 409. IDs inexistentes retornam 404 e entradas invalidas,
-como uma solucao vazia, retornam 400.
-
-Nao ha autenticacao: `solicitanteId`, `tecnicoId` ou `autorId` identificam o usuario
-no corpo da requisicao. A consulta detalhada traz as interacoes ordenadas por
-`dataHora` e, em caso de empate, por `id`.
-
-Exemplo de abertura, usando os dados iniciais:
-
-```http
-POST http://localhost:8080/chamados
-Content-Type: application/json
-
-{
-  "titulo": "Wi-Fi indisponivel",
-  "descricao": "Nao consigo conectar a rede",
-  "local": "Laboratorio 1",
-  "solicitanteId": 1,
-  "categoriaId": 1
-}
-```
-
-Para testar todos os Controllers, Services, validacoes e erros sem banco:
-
-```powershell
-.\mvnw.cmd "-Dtest=*ServiceTests,*ControllerTests,ValidacaoDtosTests,ApiExceptionHandlerTests" test
-```
-
-Com o PostgreSQL configurado, `.\mvnw.cmd clean verify` tambem verifica os fluxos
-completos de resolucao e cancelamento, a recuperacao do historico e os bloqueios
-apos encerramento. Esses testes desfazem seus dados ao terminar.
-
-## Listagens e filtros
-
-Todas as seis rotas de listagem aceitam `page`, `size` e `sort`, com pagina inicial
-0, tamanho padrao 10 e limite de 50 itens. A resposta inclui `content`, `number`,
-`size`, `totalElements` e `totalPages`. Uma pagina sem resultados retorna 200 com
-`content` vazio.
-
-GET `/chamados` aceita os filtros opcionais abaixo. Quando varios sao informados,
-o chamado precisa atender a todos; parametros omitidos sao ignorados.
-
-| Filtro | Conteudo |
-| --- | --- |
-| `status` | ABERTO, EM_ATENDIMENTO, RESOLVIDO ou CANCELADO |
-| `prioridade` | BAIXA, MEDIA ou ALTA |
-| `setorId` | ID do setor responsavel pela categoria |
-| `categoriaId` | ID da categoria |
-| `solicitanteId` | ID de quem abriu o chamado |
-| `tecnicoId` | ID do tecnico atribuido |
-| `dataInicio` | Inicio do periodo de abertura, em formato ISO com horario |
-| `dataFim` | Fim do periodo de abertura, em formato ISO com horario |
-
-Os dois limites de data sao inclusivos e podem ser usados separadamente.
-Exemplo de data: `2026-10-01T00:00:00`. Uma data invalida, um ID de filtro nao
-positivo, um enum invalido ou um intervalo com inicio posterior ao fim retorna 400.
-
-GET `/usuarios/{id}/chamados` aceita `status` como filtro opcional. Para um
-solicitante, retorna os chamados abertos por ele. Para um tecnico, retorna somente
-os chamados atribuidos a ele. Usuario inexistente retorna 404; usuario existente
-sem chamados correspondentes recebe uma pagina vazia.
-
-As duas listagens de chamados retornam um resumo com IDs dos participantes,
-categoria, prioridade, status e datas. As interacoes ficam na consulta detalhada
-GET `/chamados/{id}`.
-
-Exemplos:
-
-```http
-GET http://localhost:8080/chamados?status=ABERTO&setorId=1&prioridade=ALTA&page=0&size=10&sort=dataAbertura,desc
-GET http://localhost:8080/chamados?dataInicio=2026-10-01T00:00:00&dataFim=2026-10-31T23:59:59.999999
-GET http://localhost:8080/usuarios/1/chamados?status=ABERTO&page=0&size=10&sort=id,asc
-```
-
-Os testes com PostgreSQL verificam combinacoes dos oito filtros, parametros
-omitidos, limites de datas, contagem e ordenacao. Tambem conferem, pelo contexto
-real da aplicacao, os limites de pagina nas seis rotas de listagem. Eles entram
-em `.\mvnw.cmd clean verify` e desfazem seus dados ao terminar.
+Os testes de persistência desfazem os registros criados ao terminar. No Linux ou
+macOS, use `./mvnw` e exporte as mesmas variáveis. O build da imagem Docker usa
+`-DskipTests`, pois a suíte com PostgreSQL é executada separadamente.

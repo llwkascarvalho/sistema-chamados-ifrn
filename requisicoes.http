@@ -1,11 +1,13 @@
 @baseUrl = http://localhost:8080
 
-# IDs da migration V2. Ajuste se os dados iniciais forem alterados.
+# Execute as requisicoes na ordem. Os titulos indicam os erros esperados.
+# IDs de usuarios e setor da migration V2; ajuste se forem alterados.
 @solicitanteId = 1
 @outroSolicitanteId = 2
 @tecnicoId = 3
 @outroTecnicoId = 4
-@categoriaInicialId = 1
+@setorChamadoId = 1
+@categoriaChamadoId = {{criarCategoriaChamado.response.body.$.id}}
 @chamadoId = {{abrirChamado.response.body.$.id}}
 @chamadoCancelarId = {{abrirParaCancelar.response.body.$.id}}
 @setorId = {{criarSetor.response.body.$.id}}
@@ -86,7 +88,7 @@ Content-Type: application/json
 
 {
   "nome": "Maria Costa",
-  "email": "maria.costa@example.com",
+  "email": "maria.costa+{{$guid}}@example.com",
   "matricula": "20260100",
   "tipo": "SOLICITANTE"
 }
@@ -106,7 +108,7 @@ Content-Type: application/json
 
 {
   "nome": "Maria Costa Silva",
-  "email": "maria.costa@example.com",
+  "email": "{{criarUsuario.response.body.$.email}}",
   "matricula": "20260100",
   "tipo": "SOLICITANTE"
 }
@@ -117,7 +119,7 @@ Content-Type: application/json
 
 {
   "nome": "Outra pessoa",
-  "email": "maria.costa@example.com",
+  "email": "{{criarUsuario.response.body.$.email}}",
   "matricula": "20260101",
   "tipo": "SOLICITANTE"
 }
@@ -154,6 +156,29 @@ GET {{baseUrl}}/categorias/{{categoriaId}}
 DELETE {{baseUrl}}/setores/{{setorId}}
 
 
+### Criar categoria para os chamados de teste
+# @name criarCategoriaChamado
+POST {{baseUrl}}/categorias
+Content-Type: application/json
+
+{
+  "nome": "Rede de teste HTTP",
+  "descricao": "Categoria usada pelas requisicoes deste arquivo",
+  "setorId": {{setorChamadoId}}
+}
+
+### Tecnico tentando abrir chamado: 409
+POST {{baseUrl}}/chamados
+Content-Type: application/json
+
+{
+  "titulo": "Sem rede",
+  "descricao": "Sem conexao",
+  "local": "Sala 1",
+  "solicitanteId": {{tecnicoId}},
+  "categoriaId": {{categoriaChamadoId}}
+}
+
 ### Abrir chamado sem prioridade (usa MEDIA)
 # @name abrirChamado
 POST {{baseUrl}}/chamados
@@ -164,7 +189,7 @@ Content-Type: application/json
   "descricao": "Nao consigo conectar a rede",
   "local": "Laboratorio 1",
   "solicitanteId": {{solicitanteId}},
-  "categoriaId": {{categoriaInicialId}}
+  "categoriaId": {{categoriaChamadoId}}
 }
 
 ### Consultar detalhes e historico
@@ -202,6 +227,24 @@ Content-Type: application/json
 {
   "texto": "Vou verificar o ponto de acesso",
   "autorId": {{tecnicoId}}
+}
+
+### Interacao por usuario que nao participa do chamado: 409
+POST {{baseUrl}}/chamados/{{chamadoId}}/interacoes
+Content-Type: application/json
+
+{
+  "texto": "Mensagem de terceiro",
+  "autorId": {{outroSolicitanteId}}
+}
+
+### Resolucao por outro tecnico: 409
+PATCH {{baseUrl}}/chamados/{{chamadoId}}/resolver
+Content-Type: application/json
+
+{
+  "tecnicoId": {{outroTecnicoId}},
+  "solucao": "Tentativa de encerrar por outro tecnico"
 }
 
 ### Cancelamento depois de assumir: 409
@@ -253,7 +296,7 @@ Content-Type: application/json
   "local": "Sala 2",
   "prioridade": "ALTA",
   "solicitanteId": {{solicitanteId}},
-  "categoriaId": {{categoriaInicialId}}
+  "categoriaId": {{categoriaChamadoId}}
 }
 
 ### Cancelamento por outro solicitante: 409
@@ -284,14 +327,23 @@ Content-Type: application/json
 }
 
 
+### Categoria com chamados vinculados: 409
+DELETE {{baseUrl}}/categorias/{{categoriaChamadoId}}
+
+### Setor com chamados vinculados: 409
+DELETE {{baseUrl}}/setores/{{setorChamadoId}}
+
+### Chamado inexistente: 404
+GET {{baseUrl}}/chamados/9223372036854775807
+
 ### Listar chamados com paginacao e ordenacao
 GET {{baseUrl}}/chamados?page=0&size=10&sort=dataAbertura,desc
 
 ### Combinar status, prioridade e setor
-GET {{baseUrl}}/chamados?status=ABERTO&prioridade=ALTA&setorId=1&page=0&size=10
+GET {{baseUrl}}/chamados?status=ABERTO&prioridade=ALTA&setorId={{setorChamadoId}}&page=0&size=10
 
 ### Combinar os oito filtros
-GET {{baseUrl}}/chamados?status=RESOLVIDO&prioridade=MEDIA&setorId=1&categoriaId={{categoriaInicialId}}&solicitanteId={{solicitanteId}}&tecnicoId={{tecnicoId}}&dataInicio=2026-10-01T00:00:00&dataFim=2026-10-31T23:59:59.999999&page=0&size=10&sort=dataAbertura,desc
+GET {{baseUrl}}/chamados?status=RESOLVIDO&prioridade=MEDIA&setorId={{setorChamadoId}}&categoriaId={{categoriaChamadoId}}&solicitanteId={{solicitanteId}}&tecnicoId={{tecnicoId}}&dataInicio=2026-10-01T00:00:00&dataFim=2026-10-31T23:59:59.999999&page=0&size=10&sort=dataAbertura,desc
 
 ### Filtrar apenas pelo inicio do periodo
 GET {{baseUrl}}/chamados?dataInicio=2026-10-01T00:00:00
